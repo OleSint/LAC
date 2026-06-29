@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>LAC</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="settings-screen" class="screen">
+    <div class="settings-box">
+      <h1>LAC einrichten</h1>
+      <p class="hint">Verbindung zwischen diesem PC und dem Partner-PC im selben Netzwerk.</p>
+      <label>Eigener Anzeigename</label>
+      <input id="displayName" type="text" placeholder="z.B. Oliver" />
+      <label>Eigener Lausch-Port</label>
+      <input id="listenPort" type="number" value="5391" />
+      <label>Partner-IP-Adresse</label>
+      <input id="peerHost" type="text" placeholder="z.B. 192.168.1.42" />
+      <label>Partner-Port</label>
+      <input id="peerPort" type="number" value="5391" />
+      <button id="saveSettings">Speichern &amp; verbinden</button>
+    </div>
+  </div>
+
+  <div id="chat-screen" class="screen hidden">
+    <div class="topbar">
+      <div class="title">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">Verbinde...</span>
+      </div>
+      <div class="top-actions">
+        <button id="searchBtn" class="icon-btn" title="Suche">🔍</button>
+        <button id="mediaBtn" class="icon-btn" title="Medien &amp; Links">🖼</button>
+        <button id="openSettings" class="icon-btn" title="Einstellungen">⚙</button>
+      </div>
+    </div>
+    <div id="searchBar" class="search-bar hidden">
+      <input id="searchInput" type="text" placeholder="Im Chat suchen..." autocomplete="off" />
+      <span id="searchCount" class="search-count"></span>
+      <button id="searchPrev" class="icon-btn" title="Vorheriger Treffer">↑</button>
+      <button id="searchNext" class="icon-btn" title="Nächster Treffer">↓</button>
+      <button id="searchClose" class="icon-btn" title="Suche schließen">✕</button>
+    </div>
+    <div id="messages" class="messages"></div>
+    <div id="replyBar" class="reply-bar hidden">
+      <div class="reply-bar-info">
+        <div class="reply-bar-name" id="replyBarName"></div>
+        <div class="reply-bar-text" id="replyBarText"></div>
+      </div>
+      <button id="replyBarCancel" class="icon-btn" title="Antwort abbrechen">✕</button>
+    </div>
+    <div id="emojiPanel" class="emoji-panel hidden"></div>
+    <div class="composer">
+      <button id="emojiBtn" class="icon-btn" title="Emoji">😊</button>
+      <button id="attachBtn" class="icon-btn attach" title="Datei anhängen">📎</button>
+      <input id="messageInput" type="text" placeholder="Nachricht..." autocomplete="off" />
+      <button id="sendBtn">Senden</button>
+    </div>
+  </div>
+
+  <div id="media-screen" class="screen hidden">
+    <div class="topbar">
+      <div class="title">
+        <button id="mediaBack" class="icon-btn" title="Zurück">←</button>
+        <span>Medien &amp; Links</span>
+      </div>
+    </div>
+    <div class="media-tabs">
+      <button class="media-tab active" data-tab="images">Bilder</button>
+      <button class="media-tab" data-tab="documents">Dateien</button>
+      <button class="media-tab" data-tab="links">Links</button>
+    </div>
+    <div id="mediaContent" class="media-content"></div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

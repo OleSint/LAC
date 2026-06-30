@@ -77,13 +77,13 @@ function renderTextWithLinks(container, text, highlightQuery) {
     if (match.index > lastIndex) {
       container.appendChild(buildHighlightedFragment(text.slice(lastIndex, match.index), highlightQuery));
     }
+    const url = match[1];
     const a = document.createElement('a');
-    a.href = '#';
     a.className = 'msg-link';
-    a.textContent = match[1];
+    a.textContent = url;
     a.addEventListener('click', (e) => {
       e.preventDefault();
-      window.lac.openLink(match[1]);
+      window.lac.openLink(url);
     });
     container.appendChild(a);
     lastIndex = match.index + match[1].length;

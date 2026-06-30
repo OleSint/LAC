@@ -39,6 +39,14 @@ function safeSend(channel, payload) {
   }
 }
 
+// Macht per Taskleisten-Blinken (Windows/Linux) bzw. Dock-Hüpfen (macOS) auf eine
+// neue Nachricht aufmerksam, wenn das Fenster nicht fokussiert ist.
+function notifyIncoming() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isFocused()) return;
+  mainWindow.flashFrame(true);
+}
+
 function myName() {
   return (currentSettings && currentSettings.displayName) || 'Ich';
 }
@@ -57,6 +65,20 @@ function createWindow() {
     },
   });
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+  // Verhindert, dass irgendein Link (z.B. via Mittelklick-Standardverhalten) ein
+  // zweites, ungeschütztes LAC-Fenster ohne Preload öffnet. Externe URLs gehen
+  // stattdessen immer über shell.openExternal in den Standardbrowser.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  mainWindow.on('focus', () => {
+    mainWindow.flashFrame(false);
+  });
 }
 
 app.whenReady().then(() => {
@@ -114,9 +136,11 @@ function startLink(settings) {
       store.appendMessage(stored);
       safeSend('chat:incoming', stored);
       triggerLinkPreview(stored);
+      notifyIncoming();
     } else if (msg.type === 'file') {
       const stored = receiveFile(msg);
       safeSend('chat:incoming', stored);
+      notifyIncoming();
     }
   });
 

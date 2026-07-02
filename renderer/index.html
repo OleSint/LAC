@@ -6,71 +6,119 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="settings-screen" class="screen">
+  <div id="profile-screen" class="screen overlay">
     <div class="settings-box">
       <h1>LAC einrichten</h1>
-      <p class="hint">Verbindung zwischen diesem PC und dem Partner-PC im selben Netzwerk.</p>
-      <label>Eigener Anzeigename</label>
+      <p class="hint">Dein Name wird deinen Kontakten angezeigt. Andere LAC-Geräte im selben Netzwerk werden danach automatisch gefunden.</p>
+      <label>Dein Anzeigename</label>
       <input id="displayName" type="text" placeholder="z.B. Oliver" />
-      <label>Eigener Lausch-Port</label>
-      <input id="listenPort" type="number" value="5391" />
-      <label>Partner-IP-Adresse</label>
-      <input id="peerHost" type="text" placeholder="z.B. 192.168.1.42" />
-      <label>Partner-Port</label>
-      <input id="peerPort" type="number" value="5391" />
-      <button id="saveSettings">Speichern &amp; verbinden</button>
+      <button id="saveProfile">Loslegen</button>
     </div>
   </div>
 
-  <div id="chat-screen" class="screen hidden">
+  <div id="own-settings-screen" class="screen overlay hidden">
     <div class="topbar">
       <div class="title">
-        <span class="dot" id="statusDot"></span>
-        <span id="statusText">Verbinde...</span>
-      </div>
-      <div class="top-actions">
-        <button id="searchBtn" class="icon-btn" title="Suche">🔍</button>
-        <button id="mediaBtn" class="icon-btn" title="Medien &amp; Links">🖼</button>
-        <button id="openSettings" class="icon-btn" title="Einstellungen">⚙</button>
+        <button id="ownSettingsBack" class="icon-btn" title="Zurück">←</button>
+        <span>Eigenes Profil</span>
       </div>
     </div>
-    <div id="searchBar" class="search-bar hidden">
-      <input id="searchInput" type="text" placeholder="Im Chat suchen..." autocomplete="off" />
-      <span id="searchCount" class="search-count"></span>
-      <button id="searchPrev" class="icon-btn" title="Vorheriger Treffer">↑</button>
-      <button id="searchNext" class="icon-btn" title="Nächster Treffer">↓</button>
-      <button id="searchClose" class="icon-btn" title="Suche schließen">✕</button>
-    </div>
-    <div id="messages" class="messages"></div>
-    <div id="replyBar" class="reply-bar hidden">
-      <div class="reply-bar-info">
-        <div class="reply-bar-name" id="replyBarName"></div>
-        <div class="reply-bar-text" id="replyBarText"></div>
-      </div>
-      <button id="replyBarCancel" class="icon-btn" title="Antwort abbrechen">✕</button>
-    </div>
-    <div id="emojiPanel" class="emoji-panel hidden"></div>
-    <div class="composer">
-      <button id="emojiBtn" class="icon-btn" title="Emoji">😊</button>
-      <button id="attachBtn" class="icon-btn attach" title="Datei anhängen">📎</button>
-      <input id="messageInput" type="text" placeholder="Nachricht..." autocomplete="off" />
-      <button id="sendBtn">Senden</button>
+    <div class="settings-box inline">
+      <label>Dein Anzeigename</label>
+      <input id="ownDisplayName" type="text" />
+      <button id="saveOwnSettings">Speichern</button>
+      <p class="hint" id="ownPortsHint"></p>
     </div>
   </div>
 
-  <div id="media-screen" class="screen hidden">
-    <div class="topbar">
-      <div class="title">
-        <button id="mediaBack" class="icon-btn" title="Zurück">←</button>
-        <span>Medien &amp; Links</span>
+  <div id="app-layout" class="app-layout hidden">
+    <div id="sidebar" class="sidebar">
+      <div class="topbar sidebar-topbar">
+        <div class="title">
+          <button id="sidebarCollapseBtn" class="icon-btn" title="Seitenleiste einklappen">☰</button>
+          <span>LAC</span>
+        </div>
+        <div class="top-actions">
+          <button id="ownSettingsBtn" class="icon-btn" title="Eigenes Profil">⚙</button>
+        </div>
+      </div>
+
+      <div class="sidebar-content">
+        <div class="section-label">Meine Kontakte</div>
+        <div id="contactsList" class="contact-list"></div>
+
+        <div class="section-label">In der Nähe gefunden</div>
+        <div id="nearbyList" class="contact-list"></div>
+
+        <button id="showManualAdd" class="link-btn">+ Manuell per IP hinzufügen</button>
+        <div id="manualAddForm" class="manual-add-form hidden">
+          <input id="manualName" type="text" placeholder="Name (optional)" />
+          <input id="manualHost" type="text" placeholder="IP-Adresse, z.B. 192.168.1.42" />
+          <input id="manualPort" type="number" placeholder="Port (Standard 53911)" />
+          <button id="manualAddBtn">Verbinden &amp; hinzufügen</button>
+          <div id="manualAddError" class="manual-add-error hidden"></div>
+        </div>
       </div>
     </div>
-    <div class="media-tabs">
-      <button class="media-tab active" data-tab="images">Bilder</button>
-      <button class="media-tab" data-tab="documents">Dateien</button>
-      <button class="media-tab" data-tab="links">Links</button>
+
+    <div id="main-pane" class="main-pane">
+      <div id="empty-state" class="screen empty-state">
+        <button id="sidebarExpandBtnEmpty" class="icon-btn expand-btn hidden" title="Seitenleiste öffnen">☰</button>
+        <div class="empty-state-text">Wähle links einen Chat aus, um loszulegen.</div>
+      </div>
+
+      <div id="chat-screen" class="screen hidden">
+        <div class="topbar">
+          <div class="title">
+            <button id="sidebarExpandBtnChat" class="icon-btn expand-btn hidden" title="Seitenleiste öffnen">☰</button>
+            <span class="dot" id="statusDot"></span>
+            <span id="statusText">Kontakt</span>
+          </div>
+          <div class="top-actions">
+            <button id="searchBtn" class="icon-btn" title="Suche">🔍</button>
+            <button id="mediaBtn" class="icon-btn" title="Medien &amp; Links">🖼</button>
+            <button id="clearChatBtn" class="icon-btn" title="Alle Nachrichten löschen">🗑</button>
+          </div>
+        </div>
+        <div id="searchBar" class="search-bar hidden">
+          <input id="searchInput" type="text" placeholder="Im Chat suchen..." autocomplete="off" />
+          <span id="searchCount" class="search-count"></span>
+          <button id="searchPrev" class="icon-btn" title="Vorheriger Treffer">↑</button>
+          <button id="searchNext" class="icon-btn" title="Nächster Treffer">↓</button>
+          <button id="searchClose" class="icon-btn" title="Suche schließen">✕</button>
+        </div>
+        <div id="messages" class="messages"></div>
+        <div id="replyBar" class="reply-bar hidden">
+          <div class="reply-bar-info">
+            <div class="reply-bar-name" id="replyBarName"></div>
+            <div class="reply-bar-text" id="replyBarText"></div>
+          </div>
+          <button id="replyBarCancel" class="icon-btn" title="Antwort abbrechen">✕</button>
+        </div>
+        <div id="emojiPanel" class="emoji-panel hidden"></div>
+        <div class="composer">
+          <button id="emojiBtn" class="icon-btn" title="Emoji">😊</button>
+          <button id="attachBtn" class="icon-btn attach" title="Datei anhängen">📎</button>
+          <input id="messageInput" type="text" placeholder="Nachricht..." autocomplete="off" />
+          <button id="sendBtn">Senden</button>
+        </div>
+      </div>
+
+      <div id="media-screen" class="screen hidden">
+        <div class="topbar">
+          <div class="title">
+            <button id="mediaBack" class="icon-btn" title="Zurück">←</button>
+            <span>Medien &amp; Links</span>
+          </div>
+        </div>
+        <div class="media-tabs">
+          <button class="media-tab active" data-tab="images">Bilder</button>
+          <button class="media-tab" data-tab="documents">Dateien</button>
+          <button class="media-tab" data-tab="links">Links</button>
+        </div>
+        <div id="mediaContent" class="media-content"></div>
+      </div>
     </div>
-    <div id="mediaContent" class="media-content"></div>
   </div>
 
   <script src="renderer.js"></script>

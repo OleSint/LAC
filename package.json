@@ -1,7 +1,7 @@
 {
   "name": "lac",
-  "version": "1.0.0",
-  "description": "1:1 LAN Messenger zwischen zwei PCs",
+  "version": "2.1.0",
+  "description": "LAN Messenger mit mehreren Kontakten und automatischer Geräte-Erkennung",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

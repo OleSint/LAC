@@ -1,10 +1,17 @@
-const settingsScreen = document.getElementById('settings-screen');
+const profileScreen = document.getElementById('profile-screen');
+const appLayout = document.getElementById('app-layout');
+const sidebar = document.getElementById('sidebar');
+const ownSettingsScreen = document.getElementById('own-settings-screen');
+const emptyState = document.getElementById('empty-state');
 const chatScreen = document.getElementById('chat-screen');
 const mediaScreen = document.getElementById('media-screen');
 const messagesEl = document.getElementById('messages');
 const messageInput = document.getElementById('messageInput');
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
+
+const contactsListEl = document.getElementById('contactsList');
+const nearbyListEl = document.getElementById('nearbyList');
 
 const searchBar = document.getElementById('searchBar');
 const searchInput = document.getElementById('searchInput');
@@ -26,11 +33,16 @@ const EMOJIS = [
   '🤗', '👀', '💯', '🎂', '☕', '🍕', '⚽', '🎮', '📷', '🎵',
 ];
 
+let profile = null;
+let contacts = [];
+let nearby = [];
+let onlineIds = new Set();
+let unreadCounts = {}; // contactId -> Anzahl ungelesener Nachrichten
+
+let currentContactId = null;
 let allMessages = [];
 let activeQuery = '';
 let currentMatchIndex = -1;
-let connected = false;
-let peerName = null;
 let pendingReply = null;
 
 function fmtTime(ts) {
@@ -42,6 +54,270 @@ function fmtSize(bytes) {
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
+
+function initials(name) {
+  return (name || '?').trim().slice(0, 2).toUpperCase();
+}
+
+// ---------- Bootstrapping ----------
+
+async function init() {
+  profile = await window.lac.getProfile();
+  if (!profile) {
+    profileScreen.classList.remove('hidden');
+    return;
+  }
+  profileScreen.classList.add('hidden');
+  await enterApp();
+}
+
+document.getElementById('saveProfile').addEventListener('click', async () => {
+  const displayName = document.getElementById('displayName').value.trim();
+  if (!displayName) {
+    alert('Bitte einen Namen eingeben.');
+    return;
+  }
+  profile = await window.lac.saveProfile({ displayName });
+  profileScreen.classList.add('hidden');
+  await enterApp();
+});
+
+// ---------- App-Layout (Seitenleiste + Hauptbereich) ----------
+
+async function enterApp() {
+  appLayout.classList.remove('hidden');
+  showEmptyState();
+  restoreSidebarState();
+  await refreshContacts();
+  await refreshNearby();
+}
+
+function restoreSidebarState() {
+  const collapsed = localStorage.getItem('lac.sidebarCollapsed') === '1';
+  sidebar.classList.toggle('collapsed', collapsed);
+  updateExpandButtons();
+}
+
+function toggleSidebar() {
+  const collapsed = sidebar.classList.toggle('collapsed');
+  localStorage.setItem('lac.sidebarCollapsed', collapsed ? '1' : '0');
+  updateExpandButtons();
+}
+
+function updateExpandButtons() {
+  const collapsed = sidebar.classList.contains('collapsed');
+  document.getElementById('sidebarExpandBtnEmpty').classList.toggle('hidden', !collapsed);
+  document.getElementById('sidebarExpandBtnChat').classList.toggle('hidden', !collapsed);
+}
+
+document.getElementById('sidebarCollapseBtn').addEventListener('click', toggleSidebar);
+document.getElementById('sidebarExpandBtnEmpty').addEventListener('click', toggleSidebar);
+document.getElementById('sidebarExpandBtnChat').addEventListener('click', toggleSidebar);
+
+function showEmptyState() {
+  chatScreen.classList.add('hidden');
+  mediaScreen.classList.add('hidden');
+  emptyState.classList.remove('hidden');
+}
+
+// ---------- Kontaktliste ----------
+
+async function refreshContacts() {
+  contacts = await window.lac.listContacts();
+  onlineIds = new Set(contacts.filter((c) => c.online).map((c) => c.id));
+  renderContacts();
+}
+
+async function refreshNearby() {
+  nearby = await window.lac.listDiscovered();
+  renderNearby();
+}
+
+// Verschiebt draggedId direkt vor targetId in der lokalen Kontaktliste (Drag & Drop).
+function reorderLocalContacts(draggedId, targetId) {
+  const fromIdx = contacts.findIndex((c) => c.id === draggedId);
+  if (fromIdx === -1) return;
+  const [moved] = contacts.splice(fromIdx, 1);
+  const toIdx = contacts.findIndex((c) => c.id === targetId);
+  contacts.splice(toIdx === -1 ? contacts.length : toIdx, 0, moved);
+}
+
+function renderContacts() {
+  contactsListEl.innerHTML = '';
+  if (!contacts.length) {
+    const empty = document.createElement('div');
+    empty.className = 'contacts-empty';
+    empty.textContent = 'Noch keine Kontakte. Schau unten bei "In der Nähe gefunden".';
+    contactsListEl.appendChild(empty);
+    return;
+  }
+  contacts.forEach((c) => {
+    const item = document.createElement('div');
+    item.className = 'contact-item' + (c.id === currentContactId ? ' active' : '');
+    item.dataset.id = c.id;
+    item.draggable = true;
+    item.addEventListener('dragstart', (e) => {
+      item.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', c.id);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', () => item.classList.remove('dragging'));
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      item.classList.add('drag-over');
+    });
+    item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+    item.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      item.classList.remove('drag-over');
+      const draggedId = e.dataTransfer.getData('text/plain');
+      if (!draggedId || draggedId === c.id) return;
+      reorderLocalContacts(draggedId, c.id);
+      renderContacts();
+      await window.lac.reorderContacts(contacts.map((x) => x.id));
+    });
+
+    const avatar = document.createElement('div');
+    avatar.className = 'contact-avatar';
+    avatar.textContent = initials(c.name);
+
+    const info = document.createElement('div');
+    info.className = 'contact-info';
+    const name = document.createElement('div');
+    name.className = 'contact-name';
+    name.textContent = c.name;
+    const status = document.createElement('div');
+    status.className = 'contact-status' + (c.online ? ' online' : '');
+    status.textContent = c.online ? 'Online' : 'Offline';
+    info.appendChild(name);
+    info.appendChild(status);
+
+    item.appendChild(avatar);
+    item.appendChild(info);
+
+    const unread = unreadCounts[c.id] || 0;
+    if (unread > 0) {
+      const badge = document.createElement('div');
+      badge.className = 'contact-unread';
+      badge.textContent = unread > 99 ? '99+' : String(unread);
+      item.appendChild(badge);
+    }
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'contact-remove';
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Kontakt entfernen';
+    removeBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await window.lac.removeContact(c.id);
+      await refreshContacts();
+      await refreshNearby();
+    });
+    item.appendChild(removeBtn);
+
+    item.addEventListener('click', () => openChat(c));
+    contactsListEl.appendChild(item);
+  });
+}
+
+function renderNearby() {
+  nearbyListEl.innerHTML = '';
+  if (!nearby.length) {
+    const empty = document.createElement('div');
+    empty.className = 'contacts-empty';
+    empty.textContent = 'Gerade nichts in der Nähe gefunden.';
+    nearbyListEl.appendChild(empty);
+    return;
+  }
+  nearby.forEach((d) => {
+    const item = document.createElement('div');
+    item.className = 'contact-item';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'contact-avatar';
+    avatar.textContent = initials(d.name);
+
+    const info = document.createElement('div');
+    info.className = 'contact-info';
+    const name = document.createElement('div');
+    name.className = 'contact-name';
+    name.textContent = d.name;
+    const status = document.createElement('div');
+    status.className = 'contact-status';
+    status.textContent = d.host;
+    info.appendChild(name);
+    info.appendChild(status);
+
+    item.appendChild(avatar);
+    item.appendChild(info);
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'nearby-add-btn';
+    addBtn.textContent = '+ Hinzufügen';
+    addBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await window.lac.addDiscoveredContact(d);
+      await refreshContacts();
+      await refreshNearby();
+    });
+    item.appendChild(addBtn);
+
+    nearbyListEl.appendChild(item);
+  });
+}
+
+document.getElementById('showManualAdd').addEventListener('click', () => {
+  document.getElementById('manualAddForm').classList.toggle('hidden');
+});
+
+document.getElementById('manualAddBtn').addEventListener('click', async () => {
+  const name = document.getElementById('manualName').value.trim();
+  const host = document.getElementById('manualHost').value.trim();
+  const port = document.getElementById('manualPort').value.trim() || '53911';
+  const errorEl = document.getElementById('manualAddError');
+  errorEl.classList.add('hidden');
+
+  if (!host) {
+    errorEl.textContent = 'Bitte eine IP-Adresse eingeben.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  const result = await window.lac.addManualContact({ name, host, port });
+  if (!result.ok) {
+    errorEl.textContent = result.error;
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  document.getElementById('manualName').value = '';
+  document.getElementById('manualHost').value = '';
+  document.getElementById('manualPort').value = '';
+  document.getElementById('manualAddForm').classList.add('hidden');
+  await refreshContacts();
+});
+
+// ---------- Eigenes Profil ----------
+
+document.getElementById('ownSettingsBtn').addEventListener('click', async () => {
+  ownSettingsScreen.classList.remove('hidden');
+  document.getElementById('ownDisplayName').value = profile.displayName || '';
+  document.getElementById('ownPortsHint').textContent =
+    `Lausch-Port: ${profile.listenPort} · Discovery-Port: ${profile.discoveryPort}`;
+});
+
+document.getElementById('ownSettingsBack').addEventListener('click', () => {
+  ownSettingsScreen.classList.add('hidden');
+});
+
+document.getElementById('saveOwnSettings').addEventListener('click', async () => {
+  const displayName = document.getElementById('ownDisplayName').value.trim();
+  if (!displayName) return;
+  profile = await window.lac.saveProfile({ displayName });
+  ownSettingsScreen.classList.add('hidden');
+});
+
+// ---------- Chat ----------
 
 function buildHighlightedFragment(text, query) {
   const frag = document.createDocumentFragment();
@@ -208,6 +484,17 @@ function renderMessage(msg, highlightQuery) {
   });
   footer.appendChild(replyBtn);
 
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'bubble-reply-btn';
+  deleteBtn.textContent = '🗑';
+  deleteBtn.title = 'Nachricht löschen';
+  deleteBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const ok = await window.lac.deleteMessage(currentContactId, msg.id);
+    if (ok) removeMessageFromView(msg.id);
+  });
+  footer.appendChild(deleteBtn);
+
   const time = document.createElement('span');
   time.className = 'time';
   time.textContent = fmtTime(msg.ts);
@@ -250,61 +537,47 @@ function addMessage(msg) {
   }
 }
 
-async function loadHistory() {
-  allMessages = await window.lac.getHistory();
-  renderAll();
+function removeMessageFromView(id) {
+  const idx = allMessages.findIndex((m) => m.id === id);
+  if (idx !== -1) allMessages.splice(idx, 1);
+  const bubble = messagesEl.querySelector(`[data-id="${id}"]`);
+  if (bubble) bubble.remove();
+  if (activeQuery.trim()) updateSearchCount();
 }
 
-function setStatus(isConnected) {
-  connected = isConnected;
-  statusDot.classList.toggle('connected', connected);
-  statusText.textContent = connected ? `Verbunden${peerName ? ' mit ' + peerName : ''}` : 'Verbinde...';
+function setChatStatus(contact) {
+  const online = onlineIds.has(contact.id);
+  statusDot.classList.toggle('connected', online);
+  statusText.textContent = `${contact.name}${online ? '' : ' (offline)'}`;
 }
 
-async function showChatScreen() {
-  settingsScreen.classList.add('hidden');
+async function openChat(contact) {
+  currentContactId = contact.id;
+  unreadCounts[contact.id] = 0;
+
+  emptyState.classList.add('hidden');
   mediaScreen.classList.add('hidden');
   chatScreen.classList.remove('hidden');
-  const peer = await window.lac.getPeer();
-  peerName = peer ? peer.name : null;
-  await loadHistory();
-  const status = await window.lac.getLinkStatus();
-  setStatus(status.connected);
+  renderContacts();
+
+  setChatStatus(contact);
+  clearPendingReply();
+  activeQuery = '';
+  searchInput.value = '';
+  searchBar.classList.add('hidden');
+
+  allMessages = await window.lac.getHistory(contact.id);
+  renderAll();
   messageInput.focus();
 }
 
-async function init() {
-  const settings = await window.lac.getSettings();
-  if (settings && settings.peerHost) {
-    document.getElementById('displayName').value = settings.displayName || '';
-    document.getElementById('listenPort').value = settings.listenPort;
-    document.getElementById('peerHost').value = settings.peerHost;
-    document.getElementById('peerPort').value = settings.peerPort;
-    await showChatScreen();
-  } else {
-    settingsScreen.classList.remove('hidden');
-    chatScreen.classList.add('hidden');
-  }
-}
-
-document.getElementById('saveSettings').addEventListener('click', async () => {
-  const displayName = document.getElementById('displayName').value.trim();
-  const listenPort = parseInt(document.getElementById('listenPort').value, 10);
-  const peerHost = document.getElementById('peerHost').value.trim();
-  const peerPort = parseInt(document.getElementById('peerPort').value, 10);
-
-  if (!peerHost || !listenPort || !peerPort) {
-    alert('Bitte alle Felder ausfüllen.');
-    return;
-  }
-
-  await window.lac.saveSettings({ displayName, listenPort, peerHost, peerPort });
-  await showChatScreen();
-});
-
-document.getElementById('openSettings').addEventListener('click', () => {
-  chatScreen.classList.add('hidden');
-  settingsScreen.classList.remove('hidden');
+document.getElementById('clearChatBtn').addEventListener('click', async () => {
+  if (!currentContactId) return;
+  const ok = confirm('Wirklich alle Nachrichten in diesem Chat löschen?\n\nDer Chat und der Kontakt bleiben erhalten, nur die Nachrichten und angehängten Dateien werden entfernt.');
+  if (!ok) return;
+  await window.lac.clearHistory(currentContactId);
+  allMessages = [];
+  renderAll();
 });
 
 function setPendingReply(msg) {
@@ -324,11 +597,11 @@ document.getElementById('replyBarCancel').addEventListener('click', clearPending
 
 async function sendCurrentMessage() {
   const text = messageInput.value.trim();
-  if (!text) return;
+  if (!text || !currentContactId) return;
   messageInput.value = '';
   const replyTo = pendingReply;
   clearPendingReply();
-  const stored = await window.lac.sendMessage(text, replyTo);
+  const stored = await window.lac.sendMessage(currentContactId, text, replyTo);
   addMessage(stored);
 }
 
@@ -338,8 +611,9 @@ messageInput.addEventListener('keydown', (e) => {
 });
 
 document.getElementById('attachBtn').addEventListener('click', async () => {
+  if (!currentContactId) return;
   const replyTo = pendingReply;
-  const stored = await window.lac.sendFile(replyTo);
+  const stored = await window.lac.sendFile(currentContactId, replyTo);
   if (stored) {
     clearPendingReply();
     addMessage(stored);
@@ -348,6 +622,7 @@ document.getElementById('attachBtn').addEventListener('click', async () => {
 
 // Bilder aus der Zwischenablage (z.B. Screenshots) direkt einfügen und senden.
 async function handlePasteEvent(e) {
+  if (!currentContactId) return;
   const items = e.clipboardData ? e.clipboardData.items : null;
   if (!items) return;
   for (const item of items) {
@@ -358,7 +633,7 @@ async function handlePasteEvent(e) {
       const arrayBuffer = await blob.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
       const replyTo = pendingReply;
-      const stored = await window.lac.sendClipboardImage(bytes, item.type, replyTo);
+      const stored = await window.lac.sendClipboardImage(currentContactId, bytes, item.type, replyTo);
       if (stored) {
         clearPendingReply();
         addMessage(stored);
@@ -373,13 +648,50 @@ document.addEventListener('paste', (e) => {
   if (e.target !== messageInput) handlePasteEvent(e);
 });
 
-window.lac.onIncoming((msg) => addMessage(msg));
-window.lac.onStatus((status) => setStatus(status.connected));
-window.lac.onPeerName(({ name }) => {
-  peerName = name;
-  setStatus(connected);
+window.lac.onIncoming(({ contactId, message }) => {
+  if (contactId === currentContactId) {
+    addMessage(message);
+  } else {
+    unreadCounts[contactId] = (unreadCounts[contactId] || 0) + 1;
+    renderContacts();
+  }
 });
-window.lac.onPreview(({ id, preview }) => {
+
+window.lac.onDeleted(({ contactId, id }) => {
+  if (contactId === currentContactId) removeMessageFromView(id);
+});
+
+window.lac.onContactAdded((contact) => {
+  if (!contacts.find((c) => c.id === contact.id)) {
+    contacts.push({ ...contact, online: true });
+    renderContacts();
+  }
+});
+
+window.lac.onContactStatus(({ contactId, connected }) => {
+  if (connected) onlineIds.add(contactId);
+  else onlineIds.delete(contactId);
+
+  const idx = contacts.findIndex((c) => c.id === contactId);
+  if (idx !== -1) contacts[idx].online = connected;
+
+  if (contactId === currentContactId) {
+    const contact = contacts.find((c) => c.id === contactId);
+    if (contact) setChatStatus(contact);
+  }
+  renderContacts();
+});
+
+window.lac.onDiscoveryFound(() => {
+  refreshNearby();
+});
+
+window.lac.onDiscoveryLost(() => {
+  refreshNearby();
+});
+
+window.lac.onPreview(({ contactId, id, preview }) => {
+  if (contactId !== currentContactId) return;
   const stored = allMessages.find((m) => m.id === id);
   if (stored) stored.preview = preview;
   const bubble = messagesEl.querySelector(`[data-id="${id}"]`);
@@ -503,9 +815,10 @@ function renderMediaTab(data, tab) {
 }
 
 async function openMediaScreen() {
+  if (!currentContactId) return;
   chatScreen.classList.add('hidden');
   mediaScreen.classList.remove('hidden');
-  const data = await window.lac.getMedia();
+  const data = await window.lac.getMedia(currentContactId);
   renderMediaTab(data, currentMediaTab);
 }
 
@@ -520,7 +833,7 @@ document.querySelectorAll('.media-tab').forEach((btn) => {
     document.querySelectorAll('.media-tab').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
     currentMediaTab = btn.dataset.tab;
-    const data = await window.lac.getMedia();
+    const data = await window.lac.getMedia(currentContactId);
     renderMediaTab(data, currentMediaTab);
   });
 });

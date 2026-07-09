@@ -2,6 +2,16 @@
 
 Ein schlanker Messenger für den Chat innerhalb des eigenen lokalen Netzwerks (LAN) – ganz ohne Internet, Server oder Cloud. Nachrichten, Bilder und Dateien werden direkt zwischen den Geräten ausgetauscht.
 
+---
+## ☕ Support this project
+
+If this integration saves you time, consider supporting its development:
+
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%9D%A4-red?logo=github)](https://github.com/sponsors/OleSint)
+
+This project is and will remain free and open source.
+--- 
+<br>
 ## Features
 
 - **Automatische Geräte-Erkennung**: LAC-Instanzen im selben Netzwerk finden sich per UDP-Broadcast von selbst – keine manuelle IP-Eingabe nötig.
